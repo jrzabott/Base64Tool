@@ -46,12 +46,12 @@ public class Base64FileTool {
     public static String encodeFileToBase64(String filePath, boolean compress) throws IOException {
         File file = new File(filePath);
         byte[] fileContent = Files.readAllBytes(file.toPath());
-        String base64Encoded = Base64.getEncoder().encodeToString(fileContent);
 
         if (compress) {
-            return compress(base64Encoded);
+            fileContent = compress(fileContent); // Compress before Base64
         }
-        return base64Encoded;
+
+        return Base64.getEncoder().encodeToString(fileContent); // Base64 encode after compression
     }
 
     /**
@@ -63,49 +63,49 @@ public class Base64FileTool {
      * @throws IOException If there is an error writing the file.
      */
     public static void decodeBase64ToFile(String base64String, String outputFilePath, boolean compressed) throws IOException {
+        byte[] decodedBytes = Base64.getDecoder().decode(base64String); // Base64 decode first
+
         if (compressed) {
-            base64String = decompress(base64String);
+            decodedBytes = decompress(decodedBytes); // Decompress after Base64 decoding
         }
-        byte[] decodedBytes = Base64.getDecoder().decode(base64String);
+
         try (FileOutputStream fos = new FileOutputStream(outputFilePath)) {
             fos.write(decodedBytes);
         }
     }
 
     /**
-     * Compresses the given string using GZIP and returns it as a Base64-encoded string.
+     * Compresses the given byte array using LZMA2/XZ and returns the compressed bytes.
      *
-     * @param data String to compress.
-     * @return Base64-encoded compressed string.
+     * @param data Bytes to compress.
+     * @return Compressed byte array.
      * @throws IOException If compression fails.
      */
-    private static String compress(String data) throws IOException {
+    private static byte[] compress(byte[] data) throws IOException {
         ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
-        try (XZOutputStream gzip = new XZOutputStream(byteStream, new LZMA2Options(LZMA2Options.PB_MAX))) {
-            gzip.write(data.getBytes());
+        try (XZOutputStream xzOutput = new XZOutputStream(byteStream, new LZMA2Options(LZMA2Options.PRESET_DEFAULT))) {
+            xzOutput.write(data);
         }
-        byte[] compressedBytes = byteStream.toByteArray();
-        return Base64.getEncoder().encodeToString(compressedBytes); // Encode compressed data to Base64
+        return byteStream.toByteArray();
     }
 
     /**
-     * Decompresses a Base64-encoded string that was compressed with GZIP.
+     * Decompresses a byte array that was compressed with LZMA2/XZ.
      *
-     * @param compressedBase64 Compressed Base64-encoded string.
-     * @return Decompressed string.
+     * @param compressedBytes Compressed byte array.
+     * @return Decompressed byte array.
      * @throws IOException If decompression fails.
      */
-    private static String decompress(String compressedBase64) throws IOException {
-        byte[] compressedBytes = Base64.getDecoder().decode(compressedBase64);
+    private static byte[] decompress(byte[] compressedBytes) throws IOException {
         ByteArrayInputStream byteStream = new ByteArrayInputStream(compressedBytes);
-        try (XZInputStream gzip = new XZInputStream(byteStream)) {
+        try (XZInputStream xzInput = new XZInputStream(byteStream)) {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             byte[] buffer = new byte[256];
             int bytesRead;
-            while ((bytesRead = gzip.read(buffer)) > 0) {
+            while ((bytesRead = xzInput.read(buffer)) > 0) {
                 out.write(buffer, 0, bytesRead);
             }
-            return out.toString();
+            return out.toByteArray();
         }
     }
 
